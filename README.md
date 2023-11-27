@@ -73,7 +73,7 @@ Ajoutez le plugin suivant :
 </plugin>
 
 # Création des définitions de service gRPC
-.protoPlacez vos définitions/fichiers protobuf dans src/main/resources. Pour écrire des fichiers protobuf, veuillez vous référer à la documentation officielle de protobuf .
+.proto Placez vos définitions/fichiers protobuf dans src/main/resources. Pour écrire des fichiers protobuf, veuillez vous référer à la documentation officielle de protobuf .
 
 Vos .protofichiers ressemblentront à l'exemple ci-dessous :
 syntax = "proto3";
@@ -144,7 +144,7 @@ comme toujours, vous devez créer les référentiels :
 @Repository
 public interface StagiaireRepository extends JpaRepository<Stagiaire, Long> {
 }
-Cartographie de l'étudiant Grpc avec la Stagiaire Jpa
+Cartographie de la Stagiaire Grpc avec la Stagiaire Jpa
 Créons maintenant une classe qui mappera les objets de la classe Stagiaire Grpc aux objets de la classe d'étudiant jpa :
 
 
@@ -410,5 +410,303 @@ Veuillez noter que le colis grpc.studsa été généré. À l'intérieur de ce p
 
 # Créer une entite
 # Créez un projet pour Stagiaire.
+public class Stagiaire {
+    
+    private int id;
+    private String nom;
+    private String prenom;
+    private Date dateEntree;
+
+    public Stagiaire() {
+    }
+
+    public Stagiaire(String nom, String prenom, Date dateEntree) {
+        this.nom = nom;
+        this.prenom = prenom;
+        this.dateEntree = dateEntree;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public String getNom() {
+        return nom;
+    }
+
+    public void setNom(String nom) {
+        this.nom = nom;
+    }
+
+    public String getPrenom() {
+        return prenom;
+    }
+
+    public void setPrenom(String prenom) {
+        this.prenom = prenom;
+    }
+
+    public Date getDateEntree() {
+        return dateEntree;
+    }
+
+    public void setDateEntree(Date dateEntree) {
+        this.dateEntree = dateEntree;
+    }   
+}
+
+#Créer un service client Stagiaire
+Créer le service client 
+package com.expose.service;
+
+import com.google.protobuf.Empty;
+import com.leeuw.grpc.stubs.StagiaireOuterClass;
+import com.leeuw.grpc.stubs.StagiaireServiceGrpc;
+import io.grpc.stub.StreamObserver;
+import net.devh.boot.grpc.client.inject.GrpcClient;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+@Service
+public class GrpcClientService {
+    @GrpcClient("service")
+    StagiaireServiceGrpc.StagiaireServiceBlockingStub StagiaireServiceStub;
+
+    @GrpcClient("service")
+    StagiaireServiceGrpc.StagiaireServiceStub asyncStagiaireServiceStub;
+    public StagiaireOuterClass.ListStagiairesResponse listStagiaires() {
+        return StagiaireServiceStub.listStagiaires(StagiaireOuterClass.Empty.newBuilder().build());
+    }
+
+    public Flux<StagiaireOuterClass.Stagiaire> listStagiairesStream() {
+        // Use Flux.create to handle the asynchronous nature of gRPC streaming
+        return Flux.create(emitter -> {
+            asyncStagiaireServiceStub.listStagiairesStream(StagiaireOuterClass.Empty.newBuilder().build(),
+                new StreamObserver<StagiaireOuterClass.Stagiaire>() {
+                    @Override
+                    public void onNext(StagiaireOuterClass.Stagiaire Stagiaire) {
+                        // Emit each Stagiaire to the Flux
+                        emitter.next(Stagiaire);
+                    }
+
+                    @Override
+                    public void onError(Throwable throwable) {
+                        // Signal error to the Flux
+                        emitter.error(throwable);
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                        // Signal completion to the Flux
+                        emitter.complete();
+                    }
+                });
+        }, FluxSink.OverflowStrategy.BUFFER);
+    }
 
 
+
+
+    public StagiaireOuterClass.Stagiaire getStagiaireById(long id) {
+        StagiaireOuterClass.GetStagiaireRequest request = StagiaireOuterClass.GetStagiaireRequest.newBuilder().setId(id).build();
+        return StagiaireServiceStub.getStagiaire(request);
+    }
+
+    public StagiaireOuterClass.Stagiaire createStagiaire(String firstName, String lastName, long age) {
+        StagiaireOuterClass.CreateStagiaireRequest request = StagiaireOuterClass.CreateStagiaireRequest.newBuilder()
+            .setFirstName(firstName)
+            .setLastName(lastName)
+            .setAge(age)
+            .build();
+
+        return StagiaireServiceStub.createStagiaire(request);
+    }
+
+    public StagiaireOuterClass.Stagiaire updateStagiaire(StagiaireOuterClass.Stagiaire Stagiaire) {
+        return StagiaireServiceStub.updateStagiaire(Stagiaire);
+    }
+
+    public StagiaireOuterClass.DeleteStagiaireResponse deleteStagiaire(long id) {
+        StagiaireOuterClass.DeleteStagiaireRequest request = StagiaireOuterClass.DeleteStagiaireRequest.newBuilder().setId(id).build();
+        return StagiaireServiceStub.deleteStagiaire(request);
+    }
+}
+
+# Créer un contrôleur Stagiaire
+Créer un contrôleur, nommez-le GrpcControllerou ce que vous voulez
+package com.expose.controller;
+
+import com.expose.entities.CustomResponse;
+import com.expose.entities.Stagiaire;
+import com.expose.grpc.stubs.StagiaireOuterClass;
+import com.expose.service.GrpcClientService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+
+@RestController
+@RequestMapping("/Stagiaires")
+public class GrpcController {
+
+    private GrpcClientService grpcStagiaireClient;
+
+    @Autowired
+    public GrpcController(GrpcClientService grpcStagiaireClient) {
+        this.grpcStagiaireClient = grpcStagiaireClient;
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Stagiaire>> getStagiaireList() {
+        try {
+            // Call gRPC service to get a list of Stagiaires
+            StagiaireOuterClass.ListStagiairesResponse StagiaireList = grpcStagiaireClient.listStagiaires();
+
+            // Convert gRPC response to entitiess
+            List<Stagiaire> responseList = new ArrayList<>();
+            for (StagiaireOuterClass.Stagiaire Stagiaire : StagiaireList.getStagiairesList()) {
+                Stagiaire Stagiaireentities = new Stagiaire();
+                Stagiaireentities.setId(Stagiaire.getId());
+                Stagiaireentities.setFirstName(Stagiaire.getFirstName());
+                Stagiaireentities.setLastName(Stagiaire.getLastName());
+                Stagiaireentities.setAge(Stagiaire.getAge());
+
+                responseList.add(Stagiaireentities);
+            }
+
+            return ResponseEntity.ok(responseList);
+        } catch (Exception e) {
+            // Handle the exception, you can log it or return a specific error response
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    @GetMapping(value = "/{id}")
+        public ResponseEntity<Stagiaire> getStagiaireById(@PathVariable Long id) {
+
+        try{
+            StagiaireOuterClass.Stagiaire Stagiaire = grpcStagiaireClient.getStagiaireById(id);
+            // Convert gRPC response to entities
+            Stagiaire createdStagiaireentities = new Stagiaire();
+            createdStagiaireentities.setId(Stagiaire.getId());
+            createdStagiaireentities.setFirstName(Stagiaire.getFirstName());
+            createdStagiaireentities.setLastName(Stagiaire.getLastName());
+            createdStagiaireentities.setAge(Stagiaire.getAge());
+            return ResponseEntity.ok(createdStagiaireentities);
+
+        }catch (Exception e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<Stagiaire> streamStagiaires() {
+        return Flux.fromStream(grpcStagiaireClient.listStagiairesStream().toStream())
+            .map(Stagiaire -> {
+                Stagiaire Stagiaireentities = new Stagiaire();
+                Stagiaireentities.setId(Stagiaire.getId());
+                Stagiaireentities.setFirstName(Stagiaire.getFirstName());
+                Stagiaireentities.setLastName(Stagiaire.getLastName());
+                Stagiaireentities.setAge(Stagiaire.getAge());
+                return Stagiaireentities;
+            });
+
+//        return Flux.interval(Duration.ofSeconds(5))
+//                .publishOn(Schedulers.boundedElastic())
+//                .flatMap(sequence -> {
+//                    // Convert the gRPC stream to a Flux
+//                    Flux<StagiaireOuterClass.Stagiaire> grpcStagiaireStream = Flux.fromStream(grpcStagiaireClient.listStagiairesStream().toStream());
+//
+//                    // Map each gRPC Stagiaire to a Stagiaire entities
+//                    return grpcStagiaireStream.map(Stagiaire -> {
+//                        Stagiaire Stagiaireentities = new Stagiaire();
+//                        Stagiaireentities.setId(Stagiaire.getId());
+//                        Stagiaireentities.setFirstName(Stagiaire.getFirstNname());
+//                        Stagiaireentities.setLastName(Stagiaire.getLastName());
+//                        Stagiaireentities.setAge(Stagiaire.getAge());
+//                        return Stagiaireentities;
+//                    });
+//                });
+    }
+
+
+    @PostMapping
+    public ResponseEntity<Stagiaire> createStagiaire(@RequestBody Stagiaire request) {
+        String firstName = request.getFirstName();
+        String lastName = request.getLastName();
+        long age = request.getAge();
+        System.out.println(firstName);
+        StagiaireOuterClass.Stagiaire createdStagiaire = grpcStagiaireClient.createStagiaire(firstName, lastName, age);
+
+        // Convert gRPC response to entities
+        Stagiaire createdStagiaireentities = new Stagiaire();
+        createdStagiaireentities.setId(createdStagiaire.getId());
+        createdStagiaireentities.setFirstName(createdStagiaire.getFirstName());
+        createdStagiaireentities.setLastName(createdStagiaire.getLastName());
+        createdStagiaireentities.setAge(createdStagiaire.getAge());
+
+        return ResponseEntity.ok(createdStagiaireentities);
+    }
+
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Stagiaire> updateStagiaire(@PathVariable Long id, @RequestBody Stagiaire updatedStagiaireentities) {
+        StagiaireOuterClass.Stagiaire updatedStagiaire = StagiaireOuterClass.Stagiaire.newBuilder()
+            .setId(id)
+            .setFirstName(updatedStagiaireentities.getFirstName())
+            .setLastName(updatedStagiaireentities.getLastName())
+            .setAge(updatedStagiaireentities.getAge())
+            .build();
+
+        // Call gRPC service to update Stagiaire
+        StagiaireOuterClass.Stagiaire updatedStagiaireResponse = grpcStagiaireClient.updateStagiaire(updatedStagiaire);
+
+        // Convert gRPC response to entities
+        Stagiaire updatedStagiaireResponseentities = new Stagiaire();
+        updatedStagiaireResponseentities.setId(updatedStagiaireResponse.getId());
+        updatedStagiaireResponseentities.setFirstName(updatedStagiaireResponse.getFirstName());
+        updatedStagiaireResponseentities.setLastName(updatedStagiaireResponse.getLastName());
+        updatedStagiaireResponseentities.setAge(updatedStagiaireResponse.getAge());
+
+        return ResponseEntity.ok(updatedStagiaireResponseentities);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteStagiaire(@PathVariable Long id) {
+        // Call gRPC service to delete Stagiaire
+        StagiaireOuterClass.DeleteStagiaireResponse deleteResponse = grpcStagiaireClient.deleteStagiaire(id);
+
+        // Check if the deletion was successful
+        if (deleteResponse != null && "Stagiaire Deleted".equalsIgnoreCase(deleteResponse.getMessage())) {
+            return ResponseEntity.ok("Stagiaire deleted successfully.");
+        } else {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete Stagiaire.");
+        }
+    }
+
+}
+# et enfin Configurer l'application
+Ajoutez les lignes suivantes àapplication.properties
+
+grpc.client.service.address=static://localhost:8081
+grpc.client.service.negotiation-type=plaintext
