@@ -1,34 +1,5 @@
 # gRPC avec Spring Boot
-Table des matières
-•	Description
-•	Configuration du serveur
-o	Créer un projet Spring Boot
-o	Ajouter des dépendances maven
-o	Création des définitions de service gRPC
-o	Créer une entité jpa Stagiaire
-o	Cartographie de la Stagiaire Grpc avec la Stagiaire Jpa
-o	Implémentation du service
-o	Configurer le serveur
-•	Configuration du client
-o	Créer un projet Spring Boot
-o	Ajouter des dépendances maven
-o	Générer des serres
-o	Créer un entite
-o	Créer un service client Stagiaire
-o	Créer un contrôleur Stagiaire 
-o	Configurer l'application
-o	Test avec facteur
-•	Sécurité
-o	Mise à jour côté serveur
-	Installation d'OpenSSL
-	Générer des clés et des certificats
-	Ajout d'une clé privée et d'un certificat au serveur
-	Création d'une classe d'intercepteur
-	Mise à jour du fichier de propriétés
-o	Mise à jour côté client
-	Ajout du certificat au client
-	Création d'une classe d'intercepteur
-	Mise à jour du fichier de propriétés
+
 # Description
 Dans ce projet, nous développons une application gRPC Spring Boot avec des composants serveur et client. L'objectif principal est de mettre en œuvre des opérations CRUD (Créer, Lire, Mettre à jour, Supprimer) pour la gestion des Stagiaires. L'application permettra des fonctionnalités telles que l'ajout de nouveaux Stagiaires, la suppression, la mise à jour des informations sur les Stagiaires et la récupération d'une liste des Stagiaires. Nous exploiterons également la programmation réactive pour récupérer et afficher efficacement une liste d'étudiants utilisant des flux.
 Configuration du serveur
